@@ -47,6 +47,7 @@ fun AppRoot(
             observeProject = { vm.observeProject(s.projectId) },
             observePiles = { vm.observePiles(s.projectId) },
             observePhotos = { vm.observePhotos(s.projectId) },
+            observeDocuments = { vm.observeDocuments(s.projectId) },
             onBack = { vm.backHome() },
             onSaveProject = { name, city -> vm.updateProject(s.projectId, name, city) },
             onDeleteProject = { vm.deleteProject(s.projectId) },
@@ -71,7 +72,16 @@ fun AppRoot(
             onRemovePlanPdf = { vm.removePlanPdf(s.projectId) },
             onAddPhoto = { photoUri -> vm.addPhoto(s.projectId, photoUri) },
             onUpdatePhoto = { photoId, includeInReport -> vm.updatePhoto(photoId, includeInReport) },
-            onDeletePhoto = { photoId -> vm.deletePhoto(photoId) }
+            onDeletePhoto = { photoId -> vm.deletePhoto(photoId) },
+
+            // Documents techniques
+            onUploadTechnicalDocument = { uri, title -> vm.uploadTechnicalDocument(s.projectId, uri, title) },
+            onDeleteTechnicalDocument = { doc -> vm.deleteTechnicalDocument(doc) },
+
+            // --- C'est ICI qu'on branche le lecteur natif ---
+            onViewTechnicalDocument = { doc ->
+                vm.openDocumentViewer(s.projectId, doc.storagePath, doc.title)
+            }
         )
 
         is Screen.PileDetail -> PileDetailScreen(
@@ -103,6 +113,13 @@ fun AppRoot(
             onAddHotspot = { page, x, y -> vm.addHotspot(s.projectId, page, x, y) },
             onHotspotTap = { hotspotId, currentPage -> vm.onHotspotTap(s.projectId, hotspotId, currentPage) },
             onUndoLastHotspot = { page -> vm.undoLastHotspot(s.projectId, page) },
+            onBack = { vm.openProject(s.projectId) }
+        )
+
+        // --- Le nouvel écran ajouté ---
+        is Screen.PdfViewer -> PdfViewerScreen(
+            storagePath = s.storagePath,
+            title = s.title,
             onBack = { vm.openProject(s.projectId) }
         )
     }

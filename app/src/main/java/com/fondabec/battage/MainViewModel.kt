@@ -1,5 +1,6 @@
 package com.fondabec.battage
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fondabec.battage.cloud.CloudSyncHolder
@@ -7,9 +8,12 @@ import com.fondabec.battage.data.MapPointRepository
 import com.fondabec.battage.data.PhotoRepository
 import com.fondabec.battage.data.PileHotspotRepository
 import com.fondabec.battage.data.PileRepository
+import com.fondabec.battage.data.ProjectDocumentEntity
+import com.fondabec.battage.data.ProjectDocumentRepository
 import com.fondabec.battage.data.ProjectRepository
 import com.fondabec.battage.data.ProjectSummary
 import com.fondabec.battage.data.SettingsRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +38,13 @@ sealed interface Screen {
         val projectId: Long,
         val pageIndex: Int = 0
     ) : Screen
+
+    // --- NOUVEL ÉCRAN : Visionneuse PDF ---
+    data class PdfViewer(
+        val projectId: Long,
+        val storagePath: String, // Le chemin dans le cloud
+        val title: String
+    ) : Screen
 }
 
 data class AppUiState(
@@ -48,6 +59,7 @@ class MainViewModel(
     private val hotspotRepo: PileHotspotRepository,
     private val mapPointRepo: MapPointRepository,
     private val photoRepo: PhotoRepository,
+    private val documentRepo: ProjectDocumentRepository, // DOIT ÊTRE PRÉSENT
     private val settingsRepo: SettingsRepository
 ) : ViewModel() {
 
@@ -58,6 +70,9 @@ class MainViewModel(
         )
     )
     val state: StateFlow<AppUiState> = _state.asStateFlow()
+
+    // Feedback pour l'upload (optionnel mais utile)
+    private val _uploadStatus = MutableStateFlow<String?>(null)
 
     init {
         viewModelScope.launch {
@@ -105,6 +120,31 @@ class MainViewModel(
     fun observePiles(projectId: Long) = pileRepo.observePilesForProject(projectId)
     fun observePile(pileId: Long) = pileRepo.observePile(pileId)
 
+    // --- Documents Techniques ---
+
+    fun observeDocuments(projectId: Long): Flow<List<ProjectDocumentEntity>> =
+        documentRepo.observeDocuments(projectId)
+
+    fun uploadTechnicalDocument(projectId: Long, uri: Uri, title: String) {
+        viewModelScope.launch {
+            _uploadStatus.value = "Envoi..."
+            documentRepo.addDocument(projectId, uri, title)
+        }
+    }
+
+    fun deleteTechnicalDocument(document: ProjectDocumentEntity) {
+        viewModelScope.launch {
+            documentRepo.deleteDocument(document)
+        }
+    }
+
+    // --- NOUVEAU : Fonction pour ouvrir la visionneuse ---
+    fun openDocumentViewer(projectId: Long, storagePath: String, title: String) {
+        _state.update {
+            it.copy(screen = Screen.PdfViewer(projectId, storagePath, title))
+        }
+    }
+
     // --- Piles
 
     fun addPile(projectId: Long) {
@@ -149,7 +189,7 @@ class MainViewModel(
     fun removePlanPdf(projectId: Long) {
         CloudSyncHolder.sync()?.removePlanPdf(projectId)
     }
-    
+
     // --- Photos ---
 
     fun observePhotos(projectId: Long) = photoRepo.observePhotosForProject(projectId)
@@ -243,7 +283,7 @@ class MainViewModel(
         }
     }
 
-    // --- Carte: points historiques (map only)
+    // --- Map ---
 
     fun observeMapPoints() = mapPointRepo.observeAll()
 
@@ -259,8 +299,6 @@ class MainViewModel(
         }
     }
 
-    // ✅ On suppose que tu as déjà observeMapProjects() pour la map (puisque ta carte fonctionne).
-    // Il reste appelé depuis AppRoot.
     fun observeMapProjects() = projectRepo.observeMapProjects()
     fun updateProjectLocation(
         projectId: Long,
@@ -285,5 +323,4 @@ class MainViewModel(
             )
         }
     }
-
 }

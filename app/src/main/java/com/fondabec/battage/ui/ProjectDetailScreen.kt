@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.fondabec.battage.data.PhotoEntity
 import com.fondabec.battage.data.PileEntity
+import com.fondabec.battage.data.ProjectDocumentEntity
 import com.fondabec.battage.data.ProjectEntity
 import com.fondabec.battage.location.ProjectLocationService
 import com.fondabec.battage.report.PdfReportExporter
@@ -90,6 +93,7 @@ fun ProjectDetailScreen(
     observeProject: () -> Flow<ProjectEntity?>,
     observePiles: () -> Flow<List<PileEntity>>,
     observePhotos: () -> Flow<List<PhotoEntity>>,
+    observeDocuments: () -> Flow<List<ProjectDocumentEntity>>,
     onBack: () -> Unit,
     onSaveProject: (name: String, city: String) -> Unit,
     onUpdateProjectLocation: (
@@ -111,16 +115,22 @@ fun ProjectDetailScreen(
     onRemovePlanPdf: () -> Unit,
     onAddPhoto: (photoUri: String) -> Unit,
     onUpdatePhoto: (photoId: Long, includeInReport: Boolean) -> Unit,
-    onDeletePhoto: (photoId: Long) -> Unit
+    onDeletePhoto: (photoId: Long) -> Unit,
+
+    // NOUVEAUX CALLBACKS POUR LES DOCS
+    onUploadTechnicalDocument: (uri: Uri, title: String) -> Unit,
+    onDeleteTechnicalDocument: (doc: ProjectDocumentEntity) -> Unit,
+    onViewTechnicalDocument: (doc: ProjectDocumentEntity) -> Unit // <--- AJOUTÉ
 ) {
     val project by observeProject().collectAsStateWithLifecycle(initialValue = null)
     val piles by observePiles().collectAsStateWithLifecycle(initialValue = emptyList())
     val photos by observePhotos().collectAsStateWithLifecycle(initialValue = emptyList())
+    val documents by observeDocuments().collectAsStateWithLifecycle(initialValue = emptyList())
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isExporting by remember { mutableStateOf(false) }
-    
+
     val defaultProjectName = "Nouveau projet"
 
     var nameField by remember(projectId) { mutableStateOf(TextFieldValue("")) }
@@ -130,6 +140,49 @@ fun ProjectDetailScreen(
     var locationEditedByUser by remember(projectId) { mutableStateOf(false) }
 
     var showPdfDialog by remember { mutableStateOf(false) }
+
+    // --- Gestion ajout doc technique ---
+    var showDocNameDialog by remember { mutableStateOf(false) }
+    var tempDocUri by remember { mutableStateOf<Uri?>(null) }
+    var newDocName by remember { mutableStateOf("") }
+
+    val techDocLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri ->
+            if (uri != null) {
+                tempDocUri = uri
+                newDocName = "Nouveau document"
+                showDocNameDialog = true
+            }
+        }
+    )
+
+    if (showDocNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showDocNameDialog = false },
+            title = { Text("Nom du document") },
+            text = {
+                OutlinedTextField(
+                    value = newDocName,
+                    onValueChange = { newDocName = it },
+                    label = { Text("Titre (ex: Étude de sol)") }
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    tempDocUri?.let { uri ->
+                        onUploadTechnicalDocument(uri, newDocName.ifBlank { "Document" })
+                        Toast.makeText(context, "Envoi en cours...", Toast.LENGTH_SHORT).show()
+                    }
+                    showDocNameDialog = false
+                }) { Text("Ajouter") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDocNameDialog = false }) { Text("Annuler") }
+            }
+        )
+    }
+    // -----------------------------------
 
     val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -159,17 +212,17 @@ fun ProjectDetailScreen(
         AlertDialog(
             onDismissRequest = { showPdfDialog = false },
             title = { Text("Gérer le plan PDF") },
-            text = { 
+            text = {
                 Column {
-                    TextButton(onClick = { 
+                    TextButton(onClick = {
                         showPdfDialog = false
                         onOpenPlan()
                     }) { Text("Voir le plan") }
-                    TextButton(onClick = { 
+                    TextButton(onClick = {
                         showPdfDialog = false
                         pdfPickerLauncher.launch("application/pdf")
                     }) { Text("Remplacer le plan") }
-                    TextButton(onClick = { 
+                    TextButton(onClick = {
                         showPdfDialog = false
                         onRemovePlanPdf()
                     }) { Text("Retirer le plan") }
@@ -349,25 +402,6 @@ fun ProjectDetailScreen(
     val avgDepth = if (piles.isEmpty()) 0.0 else piles.map { it.depthFt }.average()
     val avgDepth1 = round(avgDepth * 10.0) / 10.0
 
-    val gauges = listOf("4 1/2", "5 1/2", "7", "9 5/8")
-    var quickAddExpanded by remember { mutableStateOf(false) }
-    var mode by remember { mutableStateOf(QuickAddMode.BY_GAUGE) }
-
-    var totalCountText by remember { mutableStateOf("") }
-    var totalGauge by remember { mutableStateOf("") }
-
-    var q45 by remember { mutableStateOf("") }
-    var q55 by remember { mutableStateOf("") }
-    var q7 by remember { mutableStateOf("") }
-    var q958 by remember { mutableStateOf("") }
-
-    fun toIntSafe(s: String): Int = s.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0
-    fun resetQuickAdd() {
-        totalCountText = ""
-        totalGauge = ""
-        q45 = ""; q55 = ""; q7 = ""; q958 = ""
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -432,10 +466,8 @@ fun ProjectDetailScreen(
                         val parsed = parseLocation(locationText)
                         val cityForCompat = parsed.city.ifBlank { locationText.trim() }
 
-                        // 1) compat: name + city
                         onSaveProject(nameField.text, cityForCompat)
 
-                        // 2) structured location (✅ appel positionnel, pas d’arguments nommés)
                         if (p != null) {
                             val hasStructured =
                                 parsed.street.isNotBlank() ||
@@ -474,10 +506,48 @@ fun ProjectDetailScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { 
-                    Text(if (hasPlan) "Gérer le plan PDF" else "Associer un plan PDF")
+                ) {
+                    Text(if (hasPlan) "Gérer le plan PDF (Plan de battage)" else "Associer un plan PDF (Plan de battage)")
                 }
             }
+
+            // --- SECTION DOCUMENTS TECHNIQUES ---
+            item {
+                Text("Documents Techniques", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+            }
+
+            if (documents.isNotEmpty()) {
+                items(documents, key = { it.id }) { doc ->
+                    ListItem(
+                        leadingContent = {
+                            Icon(Icons.Default.Description, contentDescription = null)
+                        },
+                        headlineContent = { Text(doc.title) },
+                        supportingContent = { Text("Ajouté le: ${java.text.SimpleDateFormat("dd/MM/yyyy").format(java.util.Date(doc.addedAtEpochMs))}") },
+                        trailingContent = {
+                            Row {
+                                // --- NOUVEAU BOUTON : VOIR DANS L'APP ---
+                                IconButton(onClick = { onViewTechnicalDocument(doc) }) {
+                                    Icon(Icons.Default.Visibility, contentDescription = "Voir")
+                                }
+                                IconButton(onClick = { onDeleteTechnicalDocument(doc) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Supprimer")
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
+            item {
+                Button(
+                    onClick = { techDocLauncher.launch("application/pdf") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Ajouter un document technique")
+                }
+            }
+            // ------------------------------------
 
             item {
                 val p = project
@@ -513,12 +583,12 @@ fun ProjectDetailScreen(
                 }
             }
 
-            item { Text("Résumé") }
+            item { Text("Résumé", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top=8.dp)) }
             item { Text("• Profondeur moyenne: $avgDepth1 ft") }
             item { Text("• Pieux implantés: $implantedCount / $total") }
 
             // --- Photos ---
-            item { 
+            item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Photos", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.weight(1f))
@@ -547,7 +617,7 @@ fun ProjectDetailScreen(
                 }
             }
 
-            item { Text("Pieux ($total)") }
+            item { Text("Pieux ($total)", style = MaterialTheme.typography.titleLarge) }
 
             if (piles.isEmpty()) {
                 item { Text("Aucun pieu. Ajoute-en un.") }

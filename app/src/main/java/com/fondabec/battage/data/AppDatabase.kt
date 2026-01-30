@@ -7,7 +7,8 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-private const val DB_VERSION = 10
+// On passe à la version 11
+private const val DB_VERSION = 11
 
 private val MIGRATION_6_7_ADD_MAP_POINTS = object : Migration(6, 7) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -61,13 +62,40 @@ private val MIGRATION_7_8_ADD_CLOUD_FIELDS = object : Migration(7, 8) {
     }
 }
 
+// Nouvelle migration pour ajouter la table des documents
+private val MIGRATION_10_11_ADD_DOCUMENTS = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS project_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                projectId INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                storagePath TEXT NOT NULL,
+                downloadUrl TEXT NOT NULL,
+                mimeType TEXT NOT NULL DEFAULT 'application/pdf',
+                addedAtEpochMs INTEGER NOT NULL,
+                updatedAtEpochMs INTEGER NOT NULL,
+                remoteId TEXT NOT NULL DEFAULT '',
+                ownerUid TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(projectId) REFERENCES projects(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_project_documents_projectId ON project_documents(projectId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_project_documents_remoteId ON project_documents(remoteId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_project_documents_ownerUid ON project_documents(ownerUid)")
+    }
+}
+
 @Database(
     entities = [
         ProjectEntity::class,
         PileEntity::class,
         PileHotspotEntity::class,
         MapPointEntity::class,
-        PhotoEntity::class
+        PhotoEntity::class,
+        ProjectDocumentEntity::class // Ajouté
     ],
     version = DB_VERSION,
     exportSchema = false
@@ -79,6 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pileHotspotDao(): PileHotspotDao
     abstract fun mapPointDao(): MapPointDao
     abstract fun photoDao(): PhotoDao
+    abstract fun projectDocumentDao(): ProjectDocumentDao // Ajouté
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -92,9 +121,9 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_6_7_ADD_MAP_POINTS,
-                        MIGRATION_7_8_ADD_CLOUD_FIELDS
+                        MIGRATION_7_8_ADD_CLOUD_FIELDS,
+                        MIGRATION_10_11_ADD_DOCUMENTS // Ajouté
                     )
-                    // Terrain: robustesse si DB incohérente
                     .fallbackToDestructiveMigration()
                     .build()
 

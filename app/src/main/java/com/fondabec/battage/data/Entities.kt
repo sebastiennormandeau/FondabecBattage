@@ -140,3 +140,37 @@ data class PhotoEntity(
     val remoteId: String,
     val ownerUid: String
 )
+
+// --- NOUVELLE ENTITÉ POUR LES DOCUMENTS TECHNIQUES ---
+@Entity(
+    tableName = "project_documents",
+    foreignKeys = [
+        ForeignKey(
+            entity = ProjectEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["projectId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index("projectId"),
+        Index("remoteId"),
+        Index("ownerUid")
+    ]
+)
+data class ProjectDocumentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val projectId: Long,
+
+    val title: String,
+    val storagePath: String,    // Chemin Firebase Storage
+    val downloadUrl: String,    // URL publique ou signée
+    val mimeType: String = "application/pdf",
+
+    val addedAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+
+    // Cloud
+    val remoteId: String = "",
+    val ownerUid: String = ""
+)

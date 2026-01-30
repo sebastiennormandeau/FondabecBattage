@@ -14,6 +14,7 @@ import com.fondabec.battage.data.MapPointRepository
 import com.fondabec.battage.data.PhotoRepository
 import com.fondabec.battage.data.PileHotspotRepository
 import com.fondabec.battage.data.PileRepository
+import com.fondabec.battage.data.ProjectDocumentRepository
 import com.fondabec.battage.data.ProjectRepository
 import com.fondabec.battage.data.SettingsRepository
 import com.fondabec.battage.ui.AppRoot
@@ -32,7 +33,7 @@ class MainActivity : ComponentActivity() {
         CloudSyncHolder.init(applicationContext, db)
         CloudSyncHolder.start()
 
-        // Repos (⚠️ injecte les DAO requis par TES constructeurs)
+        // Repos
         val projectRepo = ProjectRepository(dao = db.projectDao())
 
         val pileRepo = PileRepository(
@@ -49,17 +50,30 @@ class MainActivity : ComponentActivity() {
         val mapPointRepo = MapPointRepository(dao = db.mapPointDao())
         val photoRepo = PhotoRepository(dao = db.photoDao())
 
+        // NOUVEAU REPO POUR LES DOCS
+        val documentRepo = ProjectDocumentRepository(
+            dao = db.projectDocumentDao(),
+            projectDao = db.projectDao()
+        )
+
         val settingsRepo = SettingsRepository(applicationContext)
 
         val vm = ViewModelProvider(
             this,
-            MainViewModelFactory(projectRepo, pileRepo, hotspotRepo, mapPointRepo, photoRepo, settingsRepo)
+            MainViewModelFactory(
+                projectRepo,
+                pileRepo,
+                hotspotRepo,
+                mapPointRepo,
+                photoRepo,
+                documentRepo, // <--- AJOUTÉ
+                settingsRepo
+            )
         )[MainViewModel::class.java]
 
         val authVm = ViewModelProvider(this)[AuthViewModel::class.java]
 
         setContent {
-            // ✅ Important: collecte le StateFlow -> recomposition OK (ex: mode sombre)
             val state by vm.state.collectAsState()
 
             FondabecBattageTheme(darkTheme = state.isDarkMode) {
