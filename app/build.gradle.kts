@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -9,12 +11,23 @@ android {
     namespace = "com.fondabec.battage"
     compileSdk = 36
 
+    // --- AJOUT : Code pour lire local.properties ---
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localProperties.load(localPropertiesFile.inputStream())
+    }
+    val mapsApiKey = localProperties.getProperty("MAPS_API_KEY") ?: ""
+    // ----------------------------------------------
+
     defaultConfig {
         applicationId = "com.fondabec.battage"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
         versionName = "0.0.1"
+        // --- AJOUT : Injecter la clé dans le Manifest ---
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildFeatures { compose = true }
