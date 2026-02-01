@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -134,7 +135,7 @@ fun DepthMapScreen(
 
     val cameraPositionState = rememberCameraPositionState()
 
-    // CORRECTIF : Utilisation de 'remember' pour éviter l'erreur d'inspection
+    // CORRECTIF 1 : 'remember' pour les settings de la carte
     val uiSettings = remember {
         MapUiSettings(
             compassEnabled = true,
@@ -142,7 +143,7 @@ fun DepthMapScreen(
             myLocationButtonEnabled = false
         )
     }
-    // CORRECTIF : Utilisation de 'remember' ici aussi
+    // CORRECTIF 2 : 'remember' pour les propriétés de la carte
     val properties = remember { MapProperties(isMyLocationEnabled = false) }
 
     fun resetDraft() {
@@ -229,24 +230,28 @@ fun DepthMapScreen(
                 }
 
                 markers.forEach { m ->
-                    val hue = when (m.kind) {
-                        MarkerKind.HISTORY -> 210f // bleu
-                        MarkerKind.PROJECT -> depthHue(m.avgDepthFt, maxDepth)
+                    // CORRECTIF 3 : Utilisation de key() et remember() pour les marqueurs
+                    key(m.kind, m.id) {
+                        val hue = when (m.kind) {
+                            MarkerKind.HISTORY -> 210f // bleu
+                            MarkerKind.PROJECT -> depthHue(m.avgDepthFt, maxDepth)
+                        }
+                        Marker(
+                            state = remember(m) { MarkerState(position = LatLng(m.lat, m.lng)) },
+                            title = m.title,
+                            snippet = if (m.address.isNotBlank()) m.address else "—",
+                            icon = BitmapDescriptorFactory.defaultMarker(hue),
+                            onClick = { selected = m; true }
+                        )
                     }
-                    Marker(
-                        state = MarkerState(position = LatLng(m.lat, m.lng)),
-                        title = m.title,
-                        snippet = if (m.address.isNotBlank()) m.address else "—",
-                        icon = BitmapDescriptorFactory.defaultMarker(hue),
-                        onClick = { selected = m; true }
-                    )
                 }
 
                 // Marker "draft" visible pendant PICK (pour feedback)
                 val d = draftLatLng
                 if (addPicking && d != null) {
+                    // CORRECTIF 4 (Ta ligne 249) : remember() ajouté ici aussi
                     Marker(
-                        state = MarkerState(position = d),
+                        state = remember(d) { MarkerState(position = d) },
                         title = "Nouveau point",
                         snippet = "Long-press pour repositionner",
                         icon = BitmapDescriptorFactory.defaultMarker(60f)
