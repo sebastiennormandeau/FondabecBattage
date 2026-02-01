@@ -1,6 +1,6 @@
 [versions]
 agp = "9.0.0" # Version Stable
-kotlin = "2.2.10" # Version Stable actuelle
+kotlin = "2.0.21" # Version Stable actuelle
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -17,7 +17,7 @@ coroutines = "1.9.0"
 room = "2.6.1"
 coil = "2.7.0"
 desugar = "2.1.3"
-ksp = "2.3.2" # Version EXACTE pour Kotlin 2.0.21
+ksp = "2.0.21-1.0.28" # Version EXACTE pour Kotlin 2.0.21
 googleServices = "4.4.2"
 material = "1.13.0"
 
