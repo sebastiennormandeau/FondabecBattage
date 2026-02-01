@@ -63,6 +63,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(platform(libs.kotlin.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
@@ -76,6 +77,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
+    implementation(libs.google.android.material)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
